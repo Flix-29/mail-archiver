@@ -12,8 +12,10 @@ def _schema_path() -> Path:
 
 def init_db(db_path: str) -> sqlite3.Connection:
     Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, timeout=30)
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 5000")
+    conn.execute("PRAGMA journal_mode = DELETE")
     schema = _schema_path().read_text(encoding="utf-8")
     conn.executescript(schema)
     return conn
