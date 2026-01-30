@@ -46,6 +46,7 @@ config/.env
 
 # Docker volumes / data
 /data/
+/state/
 
 # OS files
 .DS_Store

@@ -26,4 +26,4 @@ docker compose run --rm mail-archiver sync
 
 ## Notes
 - IMAP folders can vary by locale; update `IMAP_FOLDERS` if needed.
-- SQLite DB is stored on the NAS by default; if SMB is flaky, consider keeping it local.
+- SQLite DB is stored locally in `./state` by default to avoid SMB locking issues.
