@@ -6,8 +6,8 @@ from typing import Iterable
 
 
 def _schema_path() -> Path:
-    # .../mail-archiver/src/mail_archiver/indexer.py -> repo root is parents[3]
-    return Path(__file__).resolve().parents[3] / "migrations" / "001_init.sql"
+    # .../mail-archiver/src/mail_archiver/indexer.py -> repo root is parents[2] (/app)
+    return Path(__file__).resolve().parents[2] / "migrations" / "001_init.sql"
 
 
 def init_db(db_path: str) -> sqlite3.Connection:
