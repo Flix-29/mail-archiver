@@ -28,6 +28,7 @@ env/
 
 # Environment variables
 .env
+config/.env
 
 # IDE
 .idea/
@@ -37,8 +38,14 @@ env/
 *.sqlite
 *.sqlite3
 
+# Mail archive artifacts
+*.eml
+
 # Logs
 *.log
 
 # Docker volumes / data
 /data/
+
+# OS files
+.DS_Store
