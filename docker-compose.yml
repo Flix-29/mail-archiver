@@ -1,0 +1,10 @@
+services:
+  mail-archiver:
+    build:
+      context: .
+    env_file:
+      - ./config/.env
+    volumes:
+      - /mnt/mail-archive:/data
+      - ./config:/app/config:ro
+    restart: "no"
