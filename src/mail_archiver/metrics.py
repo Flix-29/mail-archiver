@@ -3,22 +3,33 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Mapping
+from typing import Iterable, Mapping
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 
-MetricMap = Mapping[str, float | int]
+Metric = tuple[str, Mapping[str, str] | None, float | int]
 
 
-def _render_metrics(metrics: MetricMap) -> str:
+def _escape_label_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def _format_labels(labels: Mapping[str, str] | None) -> str:
+    if not labels:
+        return ""
+    parts = [f'{k}="{_escape_label_value(v)}"' for k, v in labels.items()]
+    return "{" + ",".join(parts) + "}"
+
+
+def _render_metrics(metrics: Iterable[Metric]) -> str:
     lines = []
-    for name, value in metrics.items():
-        lines.append(f"{name} {value}")
+    for name, labels, value in metrics:
+        lines.append(f"{name}{_format_labels(labels)} {value}")
     return "\n".join(lines) + "\n"
 
 
-def write_textfile(path: str, metrics: MetricMap) -> None:
+def write_textfile(path: str, metrics: Iterable[Metric]) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + ".tmp")
@@ -26,7 +37,7 @@ def write_textfile(path: str, metrics: MetricMap) -> None:
     tmp.replace(target)
 
 
-def push_to_gateway(url: str, job: str, instance: str | None, metrics: MetricMap) -> None:
+def push_to_gateway(url: str, job: str, instance: str | None, metrics: Iterable[Metric]) -> None:
     safe_job = quote(job, safe="")
     if instance:
         safe_instance = quote(instance, safe="")
@@ -47,17 +58,34 @@ def build_run_metrics(
     errors: int,
     duration_seconds: float,
     success: bool,
-) -> MetricMap:
+) -> list[Metric]:
     now = int(time.time())
-    metrics: dict[str, float | int] = {
-        "mail_archiver_last_run_timestamp": now,
-        "mail_archiver_run_duration_seconds": round(duration_seconds, 3),
-        "mail_archiver_messages_archived": archived,
-        "mail_archiver_errors": errors,
-        "mail_archiver_success": 1 if success else 0,
-    }
+    metrics: list[Metric] = [
+        ("mail_archiver_last_run_timestamp", None, now),
+        ("mail_archiver_run_duration_seconds", None, round(duration_seconds, 3)),
+        ("mail_archiver_messages_archived", None, archived),
+        ("mail_archiver_errors", None, errors),
+        ("mail_archiver_success", None, 1 if success else 0),
+    ]
     if success:
-        metrics["mail_archiver_last_success_timestamp"] = now
+        metrics.append(("mail_archiver_last_success_timestamp", None, now))
+    return metrics
+
+
+def build_db_metrics(
+    *,
+    total_messages: int,
+    total_bytes: int,
+    unique_senders: int,
+    top_senders: Iterable[tuple[str, int]],
+) -> list[Metric]:
+    metrics: list[Metric] = [
+        ("mail_archiver_total_messages", None, total_messages),
+        ("mail_archiver_total_bytes", None, total_bytes),
+        ("mail_archiver_unique_senders", None, unique_senders),
+    ]
+    for sender, count in top_senders:
+        metrics.append(("mail_archiver_sender_total", {"sender": sender}, count))
     return metrics
 
 

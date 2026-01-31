@@ -6,6 +6,7 @@ from email import policy
 from email.header import decode_header, make_header
 from email.message import Message
 from email.parser import BytesParser
+from email.utils import parseaddr
 from typing import Iterable
 
 from .archive import archive_message, build_message_id
@@ -25,6 +26,13 @@ def _decode_header_value(value: str | None) -> str:
         return str(make_header(decode_header(value)))
     except Exception:
         return value
+
+
+def _extract_email(value: str | None) -> str:
+    if not value:
+        return ""
+    _, addr = parseaddr(value)
+    return addr.lower() if addr else ""
 
 
 def _iter_uids(data: list[bytes]) -> Iterable[int]:
@@ -93,6 +101,7 @@ def sync_folder(
             message_id=archive_info.get("message_id"),
             date=archive_info.get("date"),
             from_addr=_decode_header_value(msg.get("From")),
+            from_email=_extract_email(_decode_header_value(msg.get("From"))),
             to_addr=_decode_header_value(msg.get("To")),
             subject=_decode_header_value(msg.get("Subject")),
             path=archive_info.get("path"),

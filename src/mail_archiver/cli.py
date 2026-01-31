@@ -10,8 +10,14 @@ from dotenv import load_dotenv
 
 from .config import load_config
 from .imap_sync import connect_imap, sync_folder
-from .indexer import init_db, search_messages
-from .metrics import build_run_metrics, default_instance, push_to_gateway, write_textfile
+from .indexer import get_top_senders, get_totals, init_db, search_messages
+from .metrics import (
+    build_db_metrics,
+    build_run_metrics,
+    default_instance,
+    push_to_gateway,
+    write_textfile,
+)
 
 
 def _setup_logging(log_path: str | None) -> None:
@@ -39,7 +45,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     if not config.imap_user or not config.imap_password:
         logging.error("IMAP_USER or IMAP_PASSWORD not set")
         errors += 1
-        _emit_metrics(config, total, errors, start, success)
+        _emit_metrics(config, total, errors, start, success, None, None)
         return 2
 
     conn = init_db(config.state_db)
@@ -49,8 +55,13 @@ def cmd_sync(args: argparse.Namespace) -> int:
     except Exception as exc:
         logging.error("IMAP connection failed: %s", exc)
         errors += 1
-        _emit_metrics(config, total, errors, start, success)
+        _emit_metrics(config, total, errors, start, success, None, None)
         return 2
+
+    total_messages = 0
+    total_bytes = 0
+    unique_senders = 0
+    top_senders: list[tuple[str, int]] = []
 
     try:
         for folder in config.imap_folders:
@@ -64,6 +75,10 @@ def cmd_sync(args: argparse.Namespace) -> int:
             errors += folder_errors
             logging.info("%s: %s messages archived", folder, count)
             total += count
+
+        total_messages, total_bytes, unique_senders = get_totals(conn)
+        if config.metrics_top_senders > 0:
+            top_senders = get_top_senders(conn, config.metrics_top_senders)
     finally:
         try:
             imap.logout()
@@ -72,7 +87,15 @@ def cmd_sync(args: argparse.Namespace) -> int:
         conn.close()
 
     success = errors == 0
-    _emit_metrics(config, total, errors, start, success)
+    _emit_metrics(
+        config,
+        total,
+        errors,
+        start,
+        success,
+        (total_messages, total_bytes, unique_senders),
+        top_senders,
+    )
     logging.info("Done. Total archived: %s", total)
     return 0
 
@@ -93,7 +116,15 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
-def _emit_metrics(config, total: int, errors: int, start: float, success: bool) -> None:
+def _emit_metrics(
+    config,
+    total: int,
+    errors: int,
+    start: float,
+    success: bool,
+    totals: tuple[int, int, int] | None,
+    top_senders: list[tuple[str, int]] | None,
+) -> None:
     if not config.metrics_pushgateway_url and not config.metrics_textfile:
         return
 
@@ -104,6 +135,17 @@ def _emit_metrics(config, total: int, errors: int, start: float, success: bool) 
         duration_seconds=duration,
         success=success,
     )
+
+    if totals:
+        total_messages, total_bytes, unique_senders = totals
+        metrics.extend(
+            build_db_metrics(
+                total_messages=total_messages,
+                total_bytes=total_bytes,
+                unique_senders=unique_senders,
+                top_senders=top_senders or [],
+            )
+        )
 
     instance = config.metrics_instance or default_instance()
     if config.metrics_textfile:

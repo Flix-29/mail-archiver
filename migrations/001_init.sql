@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS messages (
   message_id TEXT,
   date TEXT,
   from_addr TEXT,
+  from_email TEXT,
   to_addr TEXT,
   subject TEXT,
   path TEXT NOT NULL,

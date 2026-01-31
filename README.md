@@ -46,6 +46,10 @@ http://<NAS_IP>:9090
 
 Suggested panels:
 - `mail_archiver_messages_archived`
+- `mail_archiver_total_messages`
+- `mail_archiver_total_bytes`
+- `mail_archiver_unique_senders`
+- `mail_archiver_sender_total{sender="..."}` (top N senders)
 - `mail_archiver_run_duration_seconds`
 - `mail_archiver_errors`
 - `mail_archiver_last_run_timestamp`

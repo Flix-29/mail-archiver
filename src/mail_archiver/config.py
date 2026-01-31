@@ -36,6 +36,7 @@ class Config:
     metrics_job: str
     metrics_instance: str | None
     metrics_textfile: str | None
+    metrics_top_senders: int
 
 
 def load_config() -> Config:
@@ -56,4 +57,5 @@ def load_config() -> Config:
         metrics_job=os.getenv("METRICS_JOB", "mail_archiver"),
         metrics_instance=os.getenv("METRICS_INSTANCE") or None,
         metrics_textfile=os.getenv("METRICS_TEXTFILE") or None,
+        metrics_top_senders=_getenv_int("METRICS_TOP_SENDERS", 10),
     )

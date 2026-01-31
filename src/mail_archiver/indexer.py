@@ -18,7 +18,15 @@ def init_db(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode = DELETE")
     schema = _schema_path().read_text(encoding="utf-8")
     conn.executescript(schema)
+    _ensure_columns(conn)
     return conn
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    try:
+        conn.execute("ALTER TABLE messages ADD COLUMN from_email TEXT")
+    except sqlite3.OperationalError:
+        pass
 
 
 def get_last_uid(conn: sqlite3.Connection, folder: str) -> int:
@@ -44,6 +52,7 @@ def insert_message(
     message_id: str | None,
     date: str | None,
     from_addr: str | None,
+    from_email: str | None,
     to_addr: str | None,
     subject: str | None,
     path: str,
@@ -54,8 +63,8 @@ def insert_message(
 ) -> bool:
     cur = conn.execute(
         "INSERT OR IGNORE INTO messages "
-        "(id, folder, uid, message_id, date, from_addr, to_addr, subject, path, size, checksum, inserted_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "(id, folder, uid, message_id, date, from_addr, from_email, to_addr, subject, path, size, checksum, inserted_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             msg_id,
             folder,
@@ -63,6 +72,7 @@ def insert_message(
             message_id,
             date,
             from_addr,
+            from_email,
             to_addr,
             subject,
             path,
@@ -93,3 +103,33 @@ def search_messages(conn: sqlite3.Connection, query: str, limit: int) -> Iterabl
         (query, limit),
     )
     return cur.fetchall()
+
+
+def get_totals(conn: sqlite3.Connection) -> tuple[int, int, int]:
+    cur = conn.execute("SELECT COUNT(*), COALESCE(SUM(size), 0) FROM messages")
+    row = cur.fetchone() or (0, 0)
+    total_messages = int(row[0])
+    total_bytes = int(row[1])
+
+    cur = conn.execute(
+        "SELECT COUNT(DISTINCT COALESCE(NULLIF(from_email, ''), from_addr)) "
+        "FROM messages WHERE (from_email IS NOT NULL AND from_email != '') "
+        "OR (from_addr IS NOT NULL AND from_addr != '')"
+    )
+    row = cur.fetchone() or (0,)
+    unique_senders = int(row[0])
+
+    return total_messages, total_bytes, unique_senders
+
+
+def get_top_senders(conn: sqlite3.Connection, limit: int) -> list[tuple[str, int]]:
+    if limit <= 0:
+        return []
+    cur = conn.execute(
+        "SELECT COALESCE(NULLIF(from_email, ''), from_addr) AS sender, COUNT(*) AS c "
+        "FROM messages WHERE (from_email IS NOT NULL AND from_email != '') "
+        "OR (from_addr IS NOT NULL AND from_addr != '') "
+        "GROUP BY sender ORDER BY c DESC LIMIT ?",
+        (limit,),
+    )
+    return [(row[0], int(row[1])) for row in cur.fetchall() if row[0]]
