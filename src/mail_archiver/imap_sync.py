@@ -13,7 +13,10 @@ from .utils import extract_body_text, now_utc_iso
 
 
 def _parse_message(raw_bytes: bytes) -> Message:
-    return BytesParser(policy=policy.default).parsebytes(raw_bytes)
+    try:
+        return BytesParser(policy=policy.default).parsebytes(raw_bytes)
+    except Exception:
+        return BytesParser(policy=policy.compat32).parsebytes(raw_bytes)
 
 
 def _iter_uids(data: list[bytes]) -> Iterable[int]:
