@@ -3,6 +3,7 @@ from __future__ import annotations
 import imaplib
 import logging
 from email import policy
+from email.header import decode_header, make_header
 from email.message import Message
 from email.parser import BytesParser
 from typing import Iterable
@@ -13,10 +14,17 @@ from .utils import extract_body_text, now_utc_iso
 
 
 def _parse_message(raw_bytes: bytes) -> Message:
+    # Use the legacy parser to avoid crashes on malformed headers.
+    return BytesParser(policy=policy.compat32).parsebytes(raw_bytes)
+
+
+def _decode_header_value(value: str | None) -> str:
+    if not value:
+        return ""
     try:
-        return BytesParser(policy=policy.default).parsebytes(raw_bytes)
+        return str(make_header(decode_header(value)))
     except Exception:
-        return BytesParser(policy=policy.compat32).parsebytes(raw_bytes)
+        return value
 
 
 def _iter_uids(data: list[bytes]) -> Iterable[int]:
@@ -81,9 +89,9 @@ def sync_folder(
             uid=uid,
             message_id=archive_info.get("message_id"),
             date=archive_info.get("date"),
-            from_addr=str(msg.get("From", "")),
-            to_addr=str(msg.get("To", "")),
-            subject=str(msg.get("Subject", "")),
+            from_addr=_decode_header_value(msg.get("From")),
+            to_addr=_decode_header_value(msg.get("To")),
+            subject=_decode_header_value(msg.get("Subject")),
             path=archive_info.get("path"),
             size=int(archive_info.get("size", 0)),
             checksum=str(archive_info.get("checksum", "")),

@@ -24,15 +24,13 @@ def extract_body_text(msg: Message) -> str:
     for part in parts:
         content_type = part.get_content_type()
         if content_type == "text/plain":
-            try:
-                plain_parts.append(part.get_content())
-            except Exception:
-                logging.debug("Failed to decode text/plain part")
+            text = _get_part_text(part)
+            if text:
+                plain_parts.append(text)
         elif content_type == "text/html":
-            try:
-                html_parts.append(part.get_content())
-            except Exception:
-                logging.debug("Failed to decode text/html part")
+            text = _get_part_text(part)
+            if text:
+                html_parts.append(text)
 
     if plain_parts:
         return "\n".join(p.strip() for p in plain_parts if p)
@@ -41,6 +39,23 @@ def extract_body_text(msg: Message) -> str:
         return _strip_html("\n".join(h for h in html_parts if h))
 
     return ""
+
+
+def _get_part_text(part: Message) -> str:
+    try:
+        payload = part.get_payload(decode=True)
+    except Exception:
+        payload = None
+
+    if payload is None:
+        raw = part.get_payload()
+        return raw if isinstance(raw, str) else ""
+
+    charset = part.get_content_charset() or "utf-8"
+    try:
+        return payload.decode(charset, errors="replace")
+    except LookupError:
+        return payload.decode("utf-8", errors="replace")
 
 
 def _strip_html(html: str) -> str:
