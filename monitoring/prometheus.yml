@@ -7,5 +7,6 @@ scrape_configs:
       - targets: ["prometheus:9090"]
 
   - job_name: pushgateway
+    honor_labels: true
     static_configs:
       - targets: ["pushgateway:9091"]
