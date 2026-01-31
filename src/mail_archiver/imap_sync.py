@@ -40,24 +40,25 @@ def sync_folder(
     conn,
     archive_root: str,
     max_messages: int | None = None,
-) -> int:
+) -> tuple[int, int]:
     typ, _ = imap.select(folder, readonly=True)
     if typ != "OK":
         logging.warning("Skipping folder %s (select failed)", folder)
-        return 0
+        return 0, 1
 
     last_uid = get_last_uid(conn, folder)
     start_uid = last_uid + 1
     typ, data = imap.uid("SEARCH", None, f"UID {start_uid}:*")
     if typ != "OK":
         logging.warning("UID search failed for %s", folder)
-        return 0
+        return 0, 1
 
     uids = list(_iter_uids(data))
     if not uids:
-        return 0
+        return 0, 0
 
     count = 0
+    errors = 0
     for uid in uids:
         if max_messages and count >= max_messages:
             break
@@ -65,6 +66,7 @@ def sync_folder(
         typ, msg_data = imap.uid("FETCH", str(uid), "(RFC822)")
         if typ != "OK" or not msg_data:
             logging.warning("Fetch failed for %s UID %s", folder, uid)
+            errors += 1
             continue
 
         raw_bytes = None
@@ -75,6 +77,7 @@ def sync_folder(
 
         if not raw_bytes:
             logging.warning("Empty message for %s UID %s", folder, uid)
+            errors += 1
             continue
 
         msg = _parse_message(raw_bytes)
@@ -105,7 +108,7 @@ def sync_folder(
         set_last_uid(conn, folder, uid)
         conn.commit()
 
-    return count
+    return count, errors
 
 
 def connect_imap(host: str, port: int, ssl: bool) -> imaplib.IMAP4:

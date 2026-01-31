@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -10,6 +11,7 @@ from dotenv import load_dotenv
 from .config import load_config
 from .imap_sync import connect_imap, sync_folder
 from .indexer import init_db, search_messages
+from .metrics import build_run_metrics, default_instance, push_to_gateway, write_textfile
 
 
 def _setup_logging(log_path: str | None) -> None:
@@ -29,8 +31,15 @@ def cmd_sync(args: argparse.Namespace) -> int:
     config = load_config()
     _setup_logging(config.log_path)
 
+    start = time.time()
+    total = 0
+    errors = 0
+    success = False
+
     if not config.imap_user or not config.imap_password:
         logging.error("IMAP_USER or IMAP_PASSWORD not set")
+        errors += 1
+        _emit_metrics(config, total, errors, start, success)
         return 2
 
     conn = init_db(config.state_db)
@@ -39,18 +48,20 @@ def cmd_sync(args: argparse.Namespace) -> int:
         imap.login(config.imap_user, config.imap_password)
     except Exception as exc:
         logging.error("IMAP connection failed: %s", exc)
+        errors += 1
+        _emit_metrics(config, total, errors, start, success)
         return 2
 
-    total = 0
     try:
         for folder in config.imap_folders:
-            count = sync_folder(
+            count, folder_errors = sync_folder(
                 imap,
                 folder=folder,
                 conn=conn,
                 archive_root=config.archive_root,
                 max_messages=args.max_messages,
             )
+            errors += folder_errors
             logging.info("%s: %s messages archived", folder, count)
             total += count
     finally:
@@ -60,6 +71,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
             pass
         conn.close()
 
+    success = errors == 0
+    _emit_metrics(config, total, errors, start, success)
     logging.info("Done. Total archived: %s", total)
     return 0
 
@@ -78,6 +91,25 @@ def cmd_search(args: argparse.Namespace) -> int:
         print(f"{date}\t{from_addr}\t{subject}\t{path}")
 
     return 0
+
+
+def _emit_metrics(config, total: int, errors: int, start: float, success: bool) -> None:
+    if not config.metrics_pushgateway_url and not config.metrics_textfile:
+        return
+
+    duration = time.time() - start
+    metrics = build_run_metrics(
+        archived=total,
+        errors=errors,
+        duration_seconds=duration,
+        success=success,
+    )
+
+    instance = config.metrics_instance or default_instance()
+    if config.metrics_textfile:
+        write_textfile(config.metrics_textfile, metrics)
+    if config.metrics_pushgateway_url:
+        push_to_gateway(config.metrics_pushgateway_url, config.metrics_job, instance, metrics)
 
 
 def build_parser() -> argparse.ArgumentParser:

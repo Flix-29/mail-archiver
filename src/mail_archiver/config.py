@@ -32,6 +32,10 @@ class Config:
     archive_root: str
     state_db: str
     log_path: str | None
+    metrics_pushgateway_url: str | None
+    metrics_job: str
+    metrics_instance: str | None
+    metrics_textfile: str | None
 
 
 def load_config() -> Config:
@@ -48,4 +52,8 @@ def load_config() -> Config:
         archive_root=os.getenv("ARCHIVE_ROOT", "/data"),
         state_db=os.getenv("STATE_DB", "/data/index/mail.db"),
         log_path=os.getenv("LOG_PATH") or None,
+        metrics_pushgateway_url=os.getenv("METRICS_PUSHGATEWAY_URL") or None,
+        metrics_job=os.getenv("METRICS_JOB", "mail_archiver"),
+        metrics_instance=os.getenv("METRICS_INSTANCE") or None,
+        metrics_textfile=os.getenv("METRICS_TEXTFILE") or None,
     )
