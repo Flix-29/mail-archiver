@@ -37,6 +37,7 @@ class Config:
     metrics_instance: str | None
     metrics_textfile: str | None
     metrics_top_senders: int
+    metrics_top_domains: int
 
 
 def load_config() -> Config:
@@ -58,4 +59,5 @@ def load_config() -> Config:
         metrics_instance=os.getenv("METRICS_INSTANCE") or None,
         metrics_textfile=os.getenv("METRICS_TEXTFILE") or None,
         metrics_top_senders=_getenv_int("METRICS_TOP_SENDERS", 10),
+        metrics_top_domains=_getenv_int("METRICS_TOP_DOMAINS", 10),
     )

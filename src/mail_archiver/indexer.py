@@ -121,6 +121,16 @@ def get_totals(conn: sqlite3.Connection) -> tuple[int, int, int]:
 
     return total_messages, total_bytes, unique_senders
 
+def get_top_domains(conn: sqlite3.Connection, limit: int) -> list[tuple[str, int]]:
+    if limit <= 0:
+        return []
+    cur = conn.execute(
+        "SELECT SUBSTR(from_email, INSTR(from_email, '@') + 1) AS domain, COUNT(*) AS c "
+        "FROM messages WHERE from_email IS NOT NULL AND from_email != '' "
+        "GROUP BY domain ORDER BY c DESC LIMIT ?",
+        (limit,),
+    )
+    return [(row[0], int(row[1])) for row in cur.fetchall() if row[0]]
 
 def get_top_senders(conn: sqlite3.Connection, limit: int) -> list[tuple[str, int]]:
     if limit <= 0:

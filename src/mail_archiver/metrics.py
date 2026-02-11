@@ -78,6 +78,7 @@ def build_db_metrics(
     total_bytes: int,
     unique_senders: int,
     top_senders: Iterable[tuple[str, int]],
+    top_domains: Iterable[tuple[str, int]],
 ) -> list[Metric]:
     metrics: list[Metric] = [
         ("mail_archiver_total_messages", None, total_messages),
@@ -86,6 +87,9 @@ def build_db_metrics(
     ]
     for sender, count in top_senders:
         metrics.append(("mail_archiver_sender_total", {"sender": sender}, count))
+
+    for domain, count in top_domains:
+        metrics.append(("mail_archiver_domain_total", {"domain": domain}, count))
     return metrics
 
 

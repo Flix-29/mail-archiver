@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from .config import load_config
 from .imap_sync import connect_imap, sync_folder
-from .indexer import get_top_senders, get_totals, init_db, search_messages
+from .indexer import get_top_senders, get_top_domains, get_totals, init_db, search_messages
 from .metrics import (
     build_db_metrics,
     build_run_metrics,
@@ -45,7 +45,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     if not config.imap_user or not config.imap_password:
         logging.error("IMAP_USER or IMAP_PASSWORD not set")
         errors += 1
-        _emit_metrics(config, total, errors, start, success, None, None)
+        _emit_metrics(config, total, errors, start, success, None, None, None)
         return 2
 
     conn = init_db(config.state_db)
@@ -55,13 +55,14 @@ def cmd_sync(args: argparse.Namespace) -> int:
     except Exception as exc:
         logging.error("IMAP connection failed: %s", exc)
         errors += 1
-        _emit_metrics(config, total, errors, start, success, None, None)
+        _emit_metrics(config, total, errors, start, success, None, None, None)
         return 2
 
     total_messages = 0
     total_bytes = 0
     unique_senders = 0
     top_senders: list[tuple[str, int]] = []
+    top_domains: list[tuple[str, int]] = []
 
     try:
         for folder in config.imap_folders:
@@ -79,6 +80,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
         total_messages, total_bytes, unique_senders = get_totals(conn)
         if config.metrics_top_senders > 0:
             top_senders = get_top_senders(conn, config.metrics_top_senders)
+        if config.metrics_top_domains > 0:
+            top_domains = get_top_domains(conn, config.metrics_top_domains)
     finally:
         try:
             imap.logout()
@@ -95,6 +98,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         success,
         (total_messages, total_bytes, unique_senders),
         top_senders,
+        top_domains,
     )
     logging.info("Done. Total archived: %s", total)
     return 0
@@ -124,6 +128,7 @@ def _emit_metrics(
     success: bool,
     totals: tuple[int, int, int] | None,
     top_senders: list[tuple[str, int]] | None,
+    top_domains: list[tuple[str, int]] | None,
 ) -> None:
     if not config.metrics_pushgateway_url and not config.metrics_textfile:
         return
@@ -144,6 +149,7 @@ def _emit_metrics(
                 total_bytes=total_bytes,
                 unique_senders=unique_senders,
                 top_senders=top_senders or [],
+                top_domains=top_domains or [],
             )
         )
 
