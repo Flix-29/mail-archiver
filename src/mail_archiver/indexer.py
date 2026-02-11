@@ -98,17 +98,55 @@ def insert_message(
     return True
 
 
-def search_messages(conn: sqlite3.Connection, query: str, limit: int) -> Iterable[tuple]:
+def _order_by(sort: str) -> str:
+    if sort == "date_asc":
+        return "m.date ASC"
+    if sort == "from_asc":
+        return "m.from_addr ASC"
+    if sort == "subject_asc":
+        return "m.subject ASC"
+    return "m.date DESC"
+
+
+def count_messages(conn: sqlite3.Connection, query: str) -> int:
     cur = conn.execute(
-        "SELECT m.date, m.from_addr, m.subject, m.path "
+        "SELECT COUNT(*) "
+        "FROM messages_fts f "
+        "JOIN messages m ON m.rowid = f.rowid "
+        "WHERE messages_fts MATCH ?",
+        (query,),
+    )
+    row = cur.fetchone() or (0,)
+    return int(row[0])
+
+
+def search_messages(
+    conn: sqlite3.Connection,
+    query: str,
+    limit: int,
+    offset: int = 0,
+    sort: str = "date_desc",
+) -> Iterable[tuple]:
+    order_by = _order_by(sort)
+    cur = conn.execute(
+        "SELECT m.rowid, m.date, m.from_addr, m.subject, m.path "
         "FROM messages_fts f "
         "JOIN messages m ON m.rowid = f.rowid "
         "WHERE messages_fts MATCH ? "
-        "ORDER BY m.date DESC "
-        "LIMIT ?",
-        (query, limit),
+        f"ORDER BY {order_by} "
+        "LIMIT ? OFFSET ?",
+        (query, limit, offset),
     )
     return cur.fetchall()
+
+
+def get_message_by_rowid(conn: sqlite3.Connection, rowid: int) -> tuple | None:
+    cur = conn.execute(
+        "SELECT m.date, m.from_addr, m.subject, m.path "
+        "FROM messages m WHERE m.rowid = ?",
+        (rowid,),
+    )
+    return cur.fetchone()
 
 
 def get_totals(conn: sqlite3.Connection) -> tuple[int, int, int]:

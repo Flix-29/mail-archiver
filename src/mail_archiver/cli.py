@@ -115,7 +115,7 @@ def cmd_search(args: argparse.Namespace) -> int:
     finally:
         conn.close()
 
-    for date, from_addr, subject, path in rows:
+    for _, date, from_addr, subject, path in rows:
         print(f"{date}\t{from_addr}\t{subject}\t{path}")
 
     return 0

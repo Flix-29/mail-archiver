@@ -8,9 +8,10 @@
       :root { color-scheme: light; }
       body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; margin: 24px; color: #111; }
       h1 { font-size: 20px; margin: 0 0 16px; }
-      form { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+      form { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
       input[type="text"] { flex: 1; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; }
       input[type="number"] { width: 100px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; }
+      select { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; }
       button { padding: 8px 14px; border: 1px solid #111; background: #111; color: #fff; border-radius: 6px; cursor: pointer; }
       table { width: 100%; border-collapse: collapse; }
       th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e5e5e5; vertical-align: top; }
@@ -18,18 +19,53 @@
       code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
       .muted { color: #666; font-size: 12px; margin: 8px 0 16px; }
       .row-count { margin-bottom: 12px; }
+      .pager { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+      .pager a { color: #111; text-decoration: none; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; }
+      .pager .disabled { color: #aaa; border-color: #eee; pointer-events: none; }
+      .actions a { margin-right: 8px; }
+      .error { color: #b42318; font-size: 12px; margin: 8px 0 12px; }
     </style>
   </head>
   <body>
     <h1>Mail Archive Search</h1>
     <form method="get">
       <input type="text" name="q" value="{{ query }}" placeholder="Search... (FTS syntax)" />
+      <input type="hidden" name="page" value="1" />
+      <input type="hidden" name="raw" value="0" />
       <input type="number" name="limit" value="{{ limit }}" min="1" max="200" />
+      <select name="sort">
+        <option value="date_desc" {% if sort == 'date_desc' %}selected{% endif %}>Newest</option>
+        <option value="date_asc" {% if sort == 'date_asc' %}selected{% endif %}>Oldest</option>
+        <option value="from_asc" {% if sort == 'from_asc' %}selected{% endif %}>From (A→Z)</option>
+        <option value="subject_asc" {% if sort == 'subject_asc' %}selected{% endif %}>Subject (A→Z)</option>
+      </select>
+      <label>
+        <input type="checkbox" name="raw" value="1" {% if raw %}checked{% endif %} />
+        Raw FTS
+      </label>
       <button type="submit">Search</button>
     </form>
 
     {% if query %}
-      <div class="muted row-count">Showing {{ rows|length }} results</div>
+      {% if error %}
+        <div class="error">Query error: {{ error }}</div>
+      {% endif %}
+      <div class="muted row-count">Showing {{ rows|length }} of {{ total }} results</div>
+      {% if total_pages > 1 %}
+        <div class="pager">
+          {% if page > 1 %}
+            <a href="?q={{ query|urlencode }}&limit={{ limit }}&sort={{ sort }}&raw={{ '1' if raw else '0' }}&page={{ page - 1 }}">Prev</a>
+          {% else %}
+            <span class="disabled">Prev</span>
+          {% endif %}
+          <span>Page {{ page }} / {{ total_pages }}</span>
+          {% if page < total_pages %}
+            <a href="?q={{ query|urlencode }}&limit={{ limit }}&sort={{ sort }}&raw={{ '1' if raw else '0' }}&page={{ page + 1 }}">Next</a>
+          {% else %}
+            <span class="disabled">Next</span>
+          {% endif %}
+        </div>
+      {% endif %}
       <table>
         <thead>
           <tr>
@@ -37,15 +73,20 @@
             <th style="width: 240px;">From</th>
             <th>Subject</th>
             <th style="width: 280px;">Path</th>
+            <th style="width: 140px;">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {% for date, from_addr, subject, path in rows %}
+          {% for rowid, date, from_addr, subject, path in rows %}
             <tr>
               <td>{{ date }}</td>
               <td>{{ from_addr }}</td>
               <td>{{ subject }}</td>
               <td><code>{{ path }}</code></td>
+              <td class="actions">
+                <a href="/view/{{ rowid }}" target="_blank" rel="noopener">Open</a>
+                <a href="/download/{{ rowid }}">Download</a>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
