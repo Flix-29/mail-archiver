@@ -5,7 +5,7 @@ services:
     env_file:
       - ./config/.env
     volumes:
-      - /mnt/mail-archive:/data
+      - /Volumes/mail-archive:/data
       - ./state:/state
       - ./config:/app/config:ro
     restart: "no"

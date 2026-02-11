@@ -22,6 +22,12 @@ def init_db(db_path: str) -> sqlite3.Connection:
     return conn
 
 
+def connect_db(db_path: str) -> sqlite3.Connection:
+    conn = sqlite3.connect(db_path, timeout=30)
+    conn.execute("PRAGMA busy_timeout = 5000")
+    return conn
+
+
 def _ensure_columns(conn: sqlite3.Connection) -> None:
     try:
         conn.execute("ALTER TABLE messages ADD COLUMN from_email TEXT")
@@ -121,6 +127,7 @@ def get_totals(conn: sqlite3.Connection) -> tuple[int, int, int]:
 
     return total_messages, total_bytes, unique_senders
 
+
 def get_top_domains(conn: sqlite3.Connection, limit: int) -> list[tuple[str, int]]:
     if limit <= 0:
         return []
@@ -131,6 +138,7 @@ def get_top_domains(conn: sqlite3.Connection, limit: int) -> list[tuple[str, int
         (limit,),
     )
     return [(row[0], int(row[1])) for row in cur.fetchall() if row[0]]
+
 
 def get_top_senders(conn: sqlite3.Connection, limit: int) -> list[tuple[str, int]]:
     if limit <= 0:

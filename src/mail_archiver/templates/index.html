@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mail Archive Search</title>
+    <style>
+      :root { color-scheme: light; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; margin: 24px; color: #111; }
+      h1 { font-size: 20px; margin: 0 0 16px; }
+      form { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+      input[type="text"] { flex: 1; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; }
+      input[type="number"] { width: 100px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; }
+      button { padding: 8px 14px; border: 1px solid #111; background: #111; color: #fff; border-radius: 6px; cursor: pointer; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e5e5e5; vertical-align: top; }
+      th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #666; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      .muted { color: #666; font-size: 12px; margin: 8px 0 16px; }
+      .row-count { margin-bottom: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1>Mail Archive Search</h1>
+    <form method="get">
+      <input type="text" name="q" value="{{ query }}" placeholder="Search... (FTS syntax)" />
+      <input type="number" name="limit" value="{{ limit }}" min="1" max="200" />
+      <button type="submit">Search</button>
+    </form>
+
+    {% if query %}
+      <div class="muted row-count">Showing {{ rows|length }} results</div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 160px;">Date</th>
+            <th style="width: 240px;">From</th>
+            <th>Subject</th>
+            <th style="width: 280px;">Path</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for date, from_addr, subject, path in rows %}
+            <tr>
+              <td>{{ date }}</td>
+              <td>{{ from_addr }}</td>
+              <td>{{ subject }}</td>
+              <td><code>{{ path }}</code></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted">Enter a query to search the archive.</div>
+    {% endif %}
+  </body>
+</html>

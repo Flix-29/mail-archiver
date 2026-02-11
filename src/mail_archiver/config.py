@@ -38,6 +38,8 @@ class Config:
     metrics_textfile: str | None
     metrics_top_senders: int
     metrics_top_domains: int
+    web_host: str
+    web_port: int
 
 
 def load_config() -> Config:
@@ -60,4 +62,6 @@ def load_config() -> Config:
         metrics_textfile=os.getenv("METRICS_TEXTFILE") or None,
         metrics_top_senders=_getenv_int("METRICS_TOP_SENDERS", 10),
         metrics_top_domains=_getenv_int("METRICS_TOP_DOMAINS", 10),
+        web_host=os.getenv("WEB_HOST", "0.0.0.0"),
+        web_port=_getenv_int("WEB_PORT", 8080),
     )

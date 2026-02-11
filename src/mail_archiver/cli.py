@@ -18,6 +18,7 @@ from .metrics import (
     push_to_gateway,
     write_textfile,
 )
+from .webapp import create_app
 
 
 def _setup_logging(log_path: str | None) -> None:
@@ -120,6 +121,14 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_web(args: argparse.Namespace) -> int:
+    config = load_config()
+    _setup_logging(config.log_path)
+    app = create_app()
+    app.run(host=config.web_host, port=config.web_port)
+    return 0
+
+
 def _emit_metrics(
     config,
     total: int,
@@ -172,6 +181,9 @@ def build_parser() -> argparse.ArgumentParser:
     search.add_argument("query", help="FTS query string")
     search.add_argument("--limit", type=int, default=20, help="Max results")
     search.set_defaults(func=cmd_search)
+
+    web = sub.add_parser("web", help="Run the web UI")
+    web.set_defaults(func=cmd_web)
 
     return parser
 

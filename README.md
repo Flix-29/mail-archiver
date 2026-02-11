@@ -1,6 +1,6 @@
 # Mail Archiver (web.de -> NAS)
 
-Small Python tool to fetch mail via IMAP, archive raw `.eml` files to a NAS, and index metadata/body for fast CLI search.
+Small Python tool to fetch mail via IMAP, archive raw `.eml` files to a NAS, and index metadata/body for fast CLI search. Optional web UI and Prometheus metrics.
 
 ## Quick start
 1) Mount your NAS on the Pi host (e.g., `/mnt/mail-archive`).
@@ -11,12 +11,23 @@ Small Python tool to fetch mail via IMAP, archive raw `.eml` files to a NAS, and
 3) Edit `config/.env` with IMAP credentials and paths.
 4) Build + run sync:
    ```bash
+   docker compose build
    docker compose run --rm mail-archiver sync
    ```
-5) Search:
+5) Search (CLI):
    ```bash
    docker compose run --rm mail-archiver search "invoice acme" --limit 20
    ```
+
+## Web UI
+Run:
+```bash
+docker compose run --rm -p 8080:8080 mail-archiver web
+```
+Open:
+```
+http://<host>:8080
+```
 
 ## Scheduling (daily)
 Use cron or systemd timer on the host:
@@ -50,6 +61,7 @@ Suggested panels:
 - `mail_archiver_total_bytes`
 - `mail_archiver_unique_senders`
 - `mail_archiver_sender_total{sender="..."}` (top N senders)
+- `mail_archiver_domain_total{domain="..."}` (top N domains)
 - `mail_archiver_run_duration_seconds`
 - `mail_archiver_errors`
 - `mail_archiver_last_run_timestamp`
