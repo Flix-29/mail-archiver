@@ -59,6 +59,7 @@ def create_app() -> Flask:
     config = load_config()
     init_db(config.state_db).close()
     archive_root = Path(config.archive_root).resolve()
+    folders = config.imap_folders
 
     app = Flask(__name__)
 
@@ -108,12 +109,10 @@ def create_app() -> Flask:
         if not row:
             abort(404)
         _, _, _, path = row
-        file_path = Path(path).resolve()
-        if not _is_safe_path(file_path, archive_root):
+        resolved = _resolve_message_path(path, archive_root, folders)
+        if not resolved:
             abort(404)
-        if not file_path.exists():
-            abort(404)
-        return send_file(file_path, mimetype="message/rfc822", as_attachment=False)
+        return send_file(resolved, mimetype="message/rfc822", as_attachment=False)
 
     @app.get("/download/<int:rowid>")
     def download_message(rowid: int):
@@ -125,12 +124,10 @@ def create_app() -> Flask:
         if not row:
             abort(404)
         _, _, _, path = row
-        file_path = Path(path).resolve()
-        if not _is_safe_path(file_path, archive_root):
+        resolved = _resolve_message_path(path, archive_root, folders)
+        if not resolved:
             abort(404)
-        if not file_path.exists():
-            abort(404)
-        return send_file(file_path, as_attachment=True, download_name=file_path.name)
+        return send_file(resolved, as_attachment=True, download_name=resolved.name)
 
     @app.get("/health")
     def health():
@@ -145,6 +142,31 @@ def _is_safe_path(path: Path, root: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _resolve_message_path(stored_path: str, archive_root: Path, folders: list[str]) -> Path | None:
+    raw_path = Path(stored_path)
+
+    if not raw_path.is_absolute():
+        candidate = (archive_root / raw_path).resolve()
+        if _is_safe_path(candidate, archive_root) and candidate.exists():
+            return candidate
+        return None
+
+    resolved = raw_path.resolve()
+    if _is_safe_path(resolved, archive_root) and resolved.exists():
+        return resolved
+
+    parts = raw_path.parts
+    for folder in folders:
+        if folder in parts:
+            idx = parts.index(folder)
+            rel = Path(*parts[idx:])
+            candidate = (archive_root / rel).resolve()
+            if _is_safe_path(candidate, archive_root) and candidate.exists():
+                return candidate
+
+    return None
 
 
 def main() -> None:
