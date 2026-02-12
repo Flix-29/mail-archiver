@@ -44,6 +44,7 @@ def _iter_uids(data: list[bytes]) -> Iterable[int]:
 def sync_folder(
     imap: imaplib.IMAP4,
     *,
+    account: str,
     folder: str,
     conn,
     archive_root: str,
@@ -54,7 +55,7 @@ def sync_folder(
         logging.warning("Skipping folder %s (select failed)", folder)
         return 0, 1
 
-    last_uid = get_last_uid(conn, folder)
+    last_uid = get_last_uid(conn, account, folder)
     start_uid = last_uid + 1
     typ, data = imap.uid("SEARCH", None, f"UID {start_uid}:*")
     if typ != "OK":
@@ -89,13 +90,14 @@ def sync_folder(
             continue
 
         msg = _parse_message(raw_bytes)
-        archive_info = archive_message(archive_root, folder, uid, raw_bytes, msg)
+        archive_info = archive_message(archive_root, account, folder, uid, raw_bytes, msg)
         body_text = extract_body_text(msg)
-        msg_id = build_message_id(folder, uid, archive_info.get("message_id"))
+        msg_id = build_message_id(account, folder, uid, archive_info.get("message_id"))
 
         inserted = insert_message(
             conn,
             msg_id=msg_id,
+            account=account,
             folder=folder,
             uid=uid,
             message_id=archive_info.get("message_id"),
@@ -114,7 +116,7 @@ def sync_folder(
         if inserted:
             count += 1
 
-        set_last_uid(conn, folder, uid)
+        set_last_uid(conn, account, folder, uid)
         conn.commit()
 
     return count, errors

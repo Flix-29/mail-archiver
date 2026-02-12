@@ -25,8 +25,9 @@ def _getenv_int(name: str, default: int) -> int:
 class Config:
     imap_host: str
     imap_port: int
-    imap_user: str
-    imap_password: str
+    imap_users: list[str]
+    imap_passwords: list[str]
+    imap_accounts: list[tuple[str, str]]
     imap_ssl: bool
     imap_folders: list[str]
     archive_root: str
@@ -42,15 +43,26 @@ class Config:
     web_port: int
 
 
+def _getenv_list(name: str) -> list[str]:
+    value = os.getenv(name, "")
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 def load_config() -> Config:
     folders = os.getenv("IMAP_FOLDERS", "INBOX,Sent,Junk")
     folder_list = [f.strip() for f in folders.split(",") if f.strip()]
+    users = _getenv_list("IMAP_USER")
+    passwords = _getenv_list("IMAP_PASSWORD")
+
+    if not users or not passwords or len(users) != len(passwords):
+        raise ValueError("IMAP_USER and IMAP_PASSWORD must be set and have the same number of entries")
 
     return Config(
         imap_host=os.getenv("IMAP_HOST", "imap.web.de"),
         imap_port=_getenv_int("IMAP_PORT", 993),
-        imap_user=os.getenv("IMAP_USER", ""),
-        imap_password=os.getenv("IMAP_PASSWORD", ""),
+        imap_users=users,
+        imap_passwords=passwords,
+        imap_accounts=list(zip(users, passwords)),
         imap_ssl=_getenv_bool("IMAP_SSL", True),
         imap_folders=folder_list,
         archive_root=os.getenv("ARCHIVE_ROOT", "/data"),

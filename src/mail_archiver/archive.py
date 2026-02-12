@@ -5,6 +5,7 @@ from email.message import Message
 from email.utils import parsedate_to_datetime
 import hashlib
 from pathlib import Path
+import re
 
 
 def _safe_date(msg: Message) -> datetime:
@@ -28,20 +29,26 @@ def _hash_text(data: str) -> str:
     return hashlib.sha1(data.encode("utf-8", "ignore")).hexdigest()
 
 
-def build_message_id(folder: str, uid: int, message_id: str | None) -> str:
-    base = f"{folder}:{uid}:{message_id or ''}"
+def build_message_id(account: str, folder: str, uid: int, message_id: str | None) -> str:
+    base = f"{account}:{folder}:{uid}:{message_id or ''}"
     return _hash_text(base)
+
+
+def _safe_component(value: str) -> str:
+    safe = re.sub(r"[^a-zA-Z0-9._-]+", "_", value.strip().lower())
+    return safe.strip("._-") or "account"
 
 
 def archive_message(
     archive_root: str,
+    account: str,
     folder: str,
     uid: int,
     raw_bytes: bytes,
     msg: Message,
 ) -> dict:
     msg_date = _safe_date(msg)
-    date_path = Path(archive_root) / folder / msg_date.strftime("%Y/%m/%d")
+    date_path = Path(archive_root) / _safe_component(account) / folder / msg_date.strftime("%Y/%m/%d")
     date_path.mkdir(parents=True, exist_ok=True)
 
     message_id = msg.get("Message-ID")

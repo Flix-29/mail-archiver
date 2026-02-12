@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from .config import load_config
 from .imap_sync import connect_imap, sync_folder
-from .indexer import get_top_senders, get_top_domains, get_totals, init_db, search_messages
+from .indexer import get_top_senders, get_top_domains, get_totals, init_db, migrate_legacy_state, search_messages
 from .metrics import (
     build_db_metrics,
     build_run_metrics,
@@ -35,7 +35,12 @@ def _setup_logging(log_path: str | None) -> None:
 
 
 def cmd_sync(args: argparse.Namespace) -> int:
-    config = load_config()
+    try:
+        config = load_config()
+    except ValueError as exc:
+        _setup_logging(None)
+        logging.error("%s", exc)
+        return 2
     _setup_logging(config.log_path)
 
     start = time.time()
@@ -43,40 +48,43 @@ def cmd_sync(args: argparse.Namespace) -> int:
     errors = 0
     success = False
 
-    if not config.imap_user or not config.imap_password:
-        logging.error("IMAP_USER or IMAP_PASSWORD not set")
-        errors += 1
-        _emit_metrics(config, total, errors, start, success, None, None, None)
-        return 2
-
     conn = init_db(config.state_db)
-    try:
-        imap = connect_imap(config.imap_host, config.imap_port, config.imap_ssl)
-        imap.login(config.imap_user, config.imap_password)
-    except Exception as exc:
-        logging.error("IMAP connection failed: %s", exc)
-        errors += 1
-        _emit_metrics(config, total, errors, start, success, None, None, None)
-        return 2
+    migrate_legacy_state(conn, config.imap_accounts[0][0])
+    conn.commit()
 
     total_messages = 0
     total_bytes = 0
     unique_senders = 0
     top_senders: list[tuple[str, int]] = []
     top_domains: list[tuple[str, int]] = []
-
     try:
-        for folder in config.imap_folders:
-            count, folder_errors = sync_folder(
-                imap,
-                folder=folder,
-                conn=conn,
-                archive_root=config.archive_root,
-                max_messages=args.max_messages,
-            )
-            errors += folder_errors
-            logging.info("%s: %s messages archived", folder, count)
-            total += count
+        for user, password in config.imap_accounts:
+            try:
+                imap = connect_imap(config.imap_host, config.imap_port, config.imap_ssl)
+                imap.login(user, password)
+            except Exception as exc:
+                logging.error("IMAP connection failed for %s: %s", user, exc)
+                errors += 1
+                continue
+
+            try:
+                for folder in config.imap_folders:
+                    count, folder_errors = sync_folder(
+                        imap,
+                        account=user,
+                        folder=folder,
+                        conn=conn,
+                        archive_root=config.archive_root,
+                        max_messages=args.max_messages,
+                    )
+                    errors += folder_errors
+                    logging.info("%s [%s]: %s messages archived", folder, user, count)
+                    total += count
+            finally:
+                try:
+                    imap.logout()
+                except Exception:
+                    pass
 
         total_messages, total_bytes, unique_senders = get_totals(conn)
         if config.metrics_top_senders > 0:
@@ -84,10 +92,6 @@ def cmd_sync(args: argparse.Namespace) -> int:
         if config.metrics_top_domains > 0:
             top_domains = get_top_domains(conn, config.metrics_top_domains)
     finally:
-        try:
-            imap.logout()
-        except Exception:
-            pass
         conn.close()
 
     success = errors == 0
@@ -101,6 +105,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
         top_senders,
         top_domains,
     )
+
     logging.info("Done. Total archived: %s", total)
     return 0
 

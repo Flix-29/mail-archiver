@@ -18,7 +18,7 @@ def init_db(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode = DELETE")
     schema = _schema_path().read_text(encoding="utf-8")
     conn.executescript(schema)
-    _ensure_columns(conn)
+    _ensure_schema(conn)
     return conn
 
 
@@ -28,24 +28,74 @@ def connect_db(db_path: str) -> sqlite3.Connection:
     return conn
 
 
-def _ensure_columns(conn: sqlite3.Connection) -> None:
+def _ensure_column(conn: sqlite3.Connection, table: str, name: str, definition: str) -> None:
     try:
-        conn.execute("ALTER TABLE messages ADD COLUMN from_email TEXT")
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
     except sqlite3.OperationalError:
         pass
 
 
-def get_last_uid(conn: sqlite3.Connection, folder: str) -> int:
-    cur = conn.execute("SELECT last_uid FROM folders WHERE name = ?", (folder,))
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    _ensure_column(conn, "messages", "from_email", "TEXT")
+    _ensure_column(conn, "messages", "account", "TEXT")
+    conn.execute("UPDATE messages SET account = '' WHERE account IS NULL")
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS folder_state ("
+        "account TEXT NOT NULL, "
+        "name TEXT NOT NULL, "
+        "last_uid INTEGER NOT NULL, "
+        "PRIMARY KEY(account, name)"
+        ")"
+    )
+
+    # Drop legacy uniqueness and enforce account-scoped UID uniqueness.
+    conn.execute("DROP INDEX IF EXISTS idx_messages_folder_uid")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_account_folder_uid "
+        "ON messages(account, folder, uid)"
+    )
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    cur = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,))
+    return cur.fetchone() is not None
+
+
+def get_last_uid(conn: sqlite3.Connection, account: str, folder: str) -> int:
+    cur = conn.execute(
+        "SELECT last_uid FROM folder_state WHERE account = ? AND name = ?",
+        (account, folder),
+    )
     row = cur.fetchone()
     return int(row[0]) if row else 0
 
 
-def set_last_uid(conn: sqlite3.Connection, folder: str, last_uid: int) -> None:
+def set_last_uid(conn: sqlite3.Connection, account: str, folder: str, last_uid: int) -> None:
     conn.execute(
-        "INSERT INTO folders(name, last_uid) VALUES (?, ?) "
-        "ON CONFLICT(name) DO UPDATE SET last_uid = excluded.last_uid",
-        (folder, last_uid),
+        "INSERT INTO folder_state(account, name, last_uid) VALUES (?, ?, ?) "
+        "ON CONFLICT(account, name) DO UPDATE SET last_uid = excluded.last_uid",
+        (account, folder, last_uid),
+    )
+
+
+def migrate_legacy_state(conn: sqlite3.Connection, account: str) -> None:
+    if not _table_exists(conn, "folders"):
+        return
+
+    conn.execute(
+        "INSERT INTO folder_state(account, name, last_uid) "
+        "SELECT ?, f.name, f.last_uid FROM folders f "
+        "WHERE NOT EXISTS ("
+        "  SELECT 1 FROM folder_state s WHERE s.account = ? AND s.name = f.name"
+        ")",
+        (account, account),
+    )
+
+    conn.execute(
+        "UPDATE messages SET account = ? "
+        "WHERE account IS NULL OR account = ''",
+        (account,),
     )
 
 
@@ -53,6 +103,7 @@ def insert_message(
     conn: sqlite3.Connection,
     *,
     msg_id: str,
+    account: str,
     folder: str,
     uid: int,
     message_id: str | None,
@@ -69,10 +120,11 @@ def insert_message(
 ) -> bool:
     cur = conn.execute(
         "INSERT OR IGNORE INTO messages "
-        "(id, folder, uid, message_id, date, from_addr, from_email, to_addr, subject, path, size, checksum, inserted_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "(id, account, folder, uid, message_id, date, from_addr, from_email, to_addr, subject, path, size, checksum, inserted_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             msg_id,
+            account,
             folder,
             uid,
             message_id,
