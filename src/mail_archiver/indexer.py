@@ -79,44 +79,24 @@ def set_last_uid(conn: sqlite3.Connection, account: str, folder: str, last_uid: 
     )
 
 
-def migrate_legacy_state(conn: sqlite3.Connection, account: str) -> None:
-    if not _table_exists(conn, "folders"):
-        return
-
-    conn.execute(
-        "INSERT INTO folder_state(account, name, last_uid) "
-        "SELECT ?, f.name, f.last_uid FROM folders f "
-        "WHERE NOT EXISTS ("
-        "  SELECT 1 FROM folder_state s WHERE s.account = ? AND s.name = f.name"
-        ")",
-        (account, account),
-    )
-
-    conn.execute(
-        "UPDATE messages SET account = ? "
-        "WHERE account IS NULL OR account = ''",
-        (account,),
-    )
-
-
 def insert_message(
-    conn: sqlite3.Connection,
-    *,
-    msg_id: str,
-    account: str,
-    folder: str,
-    uid: int,
-    message_id: str | None,
-    date: str | None,
-    from_addr: str | None,
-    from_email: str | None,
-    to_addr: str | None,
-    subject: str | None,
-    path: str,
-    size: int,
-    checksum: str,
-    body_text: str | None,
-    inserted_at: str,
+        conn: sqlite3.Connection,
+        *,
+        msg_id: str,
+        account: str,
+        folder: str,
+        uid: int,
+        message_id: str | None,
+        date: str | None,
+        from_addr: str | None,
+        from_email: str | None,
+        to_addr: str | None,
+        subject: str | None,
+        path: str,
+        size: int,
+        checksum: str,
+        body_text: str | None,
+        inserted_at: str,
 ) -> bool:
     cur = conn.execute(
         "INSERT OR IGNORE INTO messages "
@@ -173,11 +153,11 @@ def count_messages(conn: sqlite3.Connection, query: str) -> int:
 
 
 def search_messages(
-    conn: sqlite3.Connection,
-    query: str,
-    limit: int,
-    offset: int = 0,
-    sort: str = "date_desc",
+        conn: sqlite3.Connection,
+        query: str,
+        limit: int,
+        offset: int = 0,
+        sort: str = "date_desc",
 ) -> Iterable[tuple]:
     order_by = _order_by(sort)
     cur = conn.execute(

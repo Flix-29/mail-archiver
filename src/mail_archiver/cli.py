@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from .config import load_config
 from .imap_sync import connect_imap, sync_folder
-from .indexer import get_top_senders, get_top_domains, get_totals, init_db, migrate_legacy_state, search_messages
+from .indexer import get_top_senders, get_top_domains, get_totals, init_db, search_messages
 from .metrics import (
     build_db_metrics,
     build_run_metrics,
@@ -49,7 +49,6 @@ def cmd_sync(args: argparse.Namespace) -> int:
     success = False
 
     conn = init_db(config.state_db)
-    migrate_legacy_state(conn, config.imap_accounts[0][0])
     conn.commit()
 
     total_messages = 0
