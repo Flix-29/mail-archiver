@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import sqlite3
+from pathlib import Path
 
-from flask import Flask, abort, render_template, request, send_file
+from flask import Flask, render_template, request
 
 from .config import load_config
 from .indexer import (
     connect_db,
     count_messages,
-    get_message_by_rowid,
     init_db,
     search_messages,
 )
@@ -58,8 +57,6 @@ def _escape_fts_query(query: str) -> str:
 def create_app() -> Flask:
     config = load_config()
     init_db(config.state_db).close()
-    archive_root = Path(config.archive_root).resolve()
-    folders = config.imap_folders
 
     app = Flask(__name__)
 
@@ -98,36 +95,6 @@ def create_app() -> Flask:
             rows=rows,
             error=error,
         )
-
-    @app.get("/view/<int:rowid>")
-    def view_message(rowid: int):
-        conn = connect_db(config.state_db)
-        try:
-            row = get_message_by_rowid(conn, rowid)
-        finally:
-            conn.close()
-        if not row:
-            abort(404)
-        _, _, _, path = row
-        resolved = _resolve_message_path(path, archive_root, folders)
-        if not resolved:
-            abort(404)
-        return send_file(resolved, mimetype="message/rfc822", as_attachment=False)
-
-    @app.get("/download/<int:rowid>")
-    def download_message(rowid: int):
-        conn = connect_db(config.state_db)
-        try:
-            row = get_message_by_rowid(conn, rowid)
-        finally:
-            conn.close()
-        if not row:
-            abort(404)
-        _, _, _, path = row
-        resolved = _resolve_message_path(path, archive_root, folders)
-        if not resolved:
-            abort(404)
-        return send_file(resolved, as_attachment=True, download_name=resolved.name)
 
     @app.get("/health")
     def health():

@@ -73,7 +73,6 @@
             <th style="width: 240px;">From</th>
             <th>Subject</th>
             <th style="width: 280px;">Path</th>
-            <th style="width: 140px;">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -83,10 +82,6 @@
               <td>{{ from_addr }}</td>
               <td>{{ subject }}</td>
               <td><code>{{ path }}</code></td>
-              <td class="actions">
-                <a href="/view/{{ rowid }}" target="_blank" rel="noopener">Open</a>
-                <a href="/download/{{ rowid }}">Download</a>
-              </td>
             </tr>
           {% endfor %}
         </tbody>
